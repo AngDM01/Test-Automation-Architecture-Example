@@ -1,0 +1,51 @@
+{
+  "name": "test-automation-architecture-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicación de productos para comparar una arquitectura de pruebas deficiente con una moderna",
+  "type": "module",
+  "packageManager": "pnpm@10.16.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "dotenv -e apps/api/.env -- pnpm --parallel --filter @products/api --filter @products/web run dev",
+    "dev:api": "dotenv -e apps/api/.env -- pnpm --filter @products/api run dev",
+    "dev:web": "pnpm --filter @products/web run dev",
+    "build": "pnpm -r run build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r run typecheck && tsc -p tests/tsconfig.json --noEmit",
+    "test:unit": "pnpm --filter @products/api run test:unit",
+    "test:api": "dotenv -e apps/api/.env -- playwright test -c tests/good/api/playwright.config.ts",
+    "test:e2e": "dotenv -e apps/api/.env -- playwright test -c tests/good/e2e/playwright.config.ts",
+    "test:bad": "dotenv -e apps/api/.env -- playwright test -c tests/bad/playwright.config.ts",
+    "test:good": "pnpm run test:api && pnpm run test:e2e",
+    "test": "pnpm run lint && pnpm run typecheck && pnpm run test:unit && pnpm run test:good",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @products/api run prisma:generate",
+    "db:migrate": "dotenv -e apps/api/.env -- pnpm --filter @products/api run prisma:migrate",
+    "db:deploy": "dotenv -e apps/api/.env -- pnpm --filter @products/api run prisma:deploy",
+    "db:clean:test": "dotenv -e apps/api/.env -- node scripts/clean-test-data.mjs",
+    "test:api:docker": "dotenv -e apps/api/.env -- cross-env API_EXTERNAL=1 playwright test -c tests/good/api/playwright.config.ts",
+    "test:e2e:docker": "dotenv -e apps/api/.env -- cross-env E2E_BASE_URL=http://localhost:8080 playwright test -c tests/good/e2e/playwright.config.ts",
+    "test:bad:docker": "dotenv -e apps/api/.env -- cross-env E2E_BASE_URL=http://localhost:8080 playwright test -c tests/bad/playwright.config.ts",
+    "report:good:e2e": "playwright show-report playwright-report/good-e2e",
+    "report:good:api": "playwright show-report playwright-report/good-api",
+    "report:bad": "playwright show-report playwright-report/bad"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.0",
+    "@types/node": "22.19.0",
+    "@types/pg": "8.23.1",
+    "cross-env": "10.1.0",
+    "dotenv-cli": "11.1.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "pg": "8.23.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

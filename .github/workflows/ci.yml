@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: [main], [dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://products:products@localhost:5432/products?schema=public
+
+jobs:
+  quality:
+    name: Lint, tipos, build y unitarias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test:unit
+
+  api-tests:
+    name: Pruebas de API
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: products
+          POSTGRES_PASSWORD: products
+          POSTGRES_DB: products
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U products -d products"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: printf 'DATABASE_URL=%s\nPORT=3000\nHOST=0.0.0.0\nNODE_ENV=development\n' "$DATABASE_URL" > apps/api/.env
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm test:api
+      - name: Publicar reporte de API
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-api
+          path: |
+            playwright-report/good-api
+            test-results/good-api
+          if-no-files-found: ignore
+
+  e2e-tests:
+    name: Pruebas E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: products
+          POSTGRES_PASSWORD: products
+          POSTGRES_DB: products
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U products -d products"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: printf 'DATABASE_URL=%s\nPORT=3000\nHOST=0.0.0.0\nNODE_ENV=development\n' "$DATABASE_URL" > apps/api/.env
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Publicar reporte E2E
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-e2e
+          path: |
+            playwright-report/good-e2e
+            test-results/good-e2e
+          if-no-files-found: ignore
+
+  bad-suite:
+    name: Demostración de la suite mala
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: products
+          POSTGRES_PASSWORD: products
+          POSTGRES_DB: products
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U products -d products"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: printf 'DATABASE_URL=%s\nPORT=3000\nHOST=0.0.0.0\nNODE_ENV=development\n' "$DATABASE_URL" > apps/api/.env
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:bad
+      - name: Publicar reporte de la suite mala
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-bad
+          path: |
+            playwright-report/bad
+            test-results/bad
+          if-no-files-found: ignore
+
+  docker:
+    name: Build de imágenes Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build
